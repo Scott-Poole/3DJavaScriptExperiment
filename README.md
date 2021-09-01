@@ -7,4 +7,4 @@ use WASD to move and hold SPACE to rise.
 The camera takes some getting used to and I know its possible to pass through the walls (and ceiling).
 Just refresh to respawn if you start falling through the map.
 
-Try it out here: 
+Try it out here: https://scott-poole.github.io/3DJavaScriptExperiment/singlePlayerSoccer.html
