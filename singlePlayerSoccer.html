@@ -1,0 +1,242 @@
+<html>
+	<head>
+		<title>My first three.js app</title>
+		<style>
+			body { margin: 0; }
+			canvas { width: 100%; height: 100% }
+		</style>
+	</head>
+	<div> Hello </div>
+	<body>
+		<script src="three.js"></script>
+		<script src="cannon.js"></script>
+		<script>
+			
+			var camera, scene, renderer; //ThreeJS globals
+			var world; // CannonJS world
+			var canvas; // element that threeJS will render in
+			var lastTime; // last timestamp of animation
+			var gameObjects; // list of objects in world/scene
+			var groundMaterial, ballMaterial, playerMaterial;
+			var gbContactMaterial, gpContactMaterial, bpContactMaterial, ppContactMaterial, bbContactMaterial;
+			
+			var vec = new THREE.Vector3();
+			var euler = new THREE.Euler( 0, 0, 0, 'YXZ' );
+			var pressingForeward, pressingBackward, pressingLeft, pressingRight, pressingJump;
+			var fieldLength, fieldWidth, fieldHeight, wallWidth;
+			
+			init();
+			
+			function init(){
+				lastTime = 0;
+				gameObjects = [];
+				
+				pressingForeward = false;
+				pressingBackward = false;
+				pressingLeft = false;
+				pressingRight = false;
+				pressingJump = false;
+				
+				fieldLength = 500;
+				fieldWidth = 100;
+				fieldHeight = 100;
+				wallWidth = 1;
+				
+				
+				//CannonJS initialization
+				world = new CANNON.World();
+				world.gravity.set(0,-10,0);
+				world.broadphase = new CANNON.NaiveBroadphase();
+				world.solver.iterations = 40;
+				groundMaterial = new CANNON.Material("ground");
+				ballMaterial = new CANNON.Material("ball");
+				playerMaterial = new CANNON.Material("player");
+				gbContactMaterial = new CANNON.ContactMaterial(groundMaterial, ballMaterial, 0, 1000000);
+				gpContactMaterial = new CANNON.ContactMaterial(groundMaterial, playerMaterial, 0, 0);
+				pbContactMaterial = new CANNON.ContactMaterial(playerMaterial, ballMaterial, 0, 0);
+				ppContactMaterial = new CANNON.ContactMaterial(playerMaterial, playerMaterial, 0, 1000000);
+				bbContactMaterial = new CANNON.ContactMaterial(ballMaterial, ballMaterial, 0, 1000000);
+				world.addContactMaterial(ppContactMaterial);
+				world.addContactMaterial(bbContactMaterial);
+				world.addContactMaterial(gbContactMaterial);
+				world.addContactMaterial(gpContactMaterial);
+				world.addContactMaterial(pbContactMaterial);
+				
+				//ThreeJS initialization
+				camera = new THREE.PerspectiveCamera( 75, window.innerWidth/window.innerHeight, 0.1, 1000 );
+				camera.position.addScaledVector(new THREE.Vector3(0,5,0),1);
+				scene = new THREE.Scene();
+				renderer = new THREE.WebGLRenderer();
+				renderer.setSize( window.innerWidth, window.innerHeight );
+				renderer.setAnimationLoop(animation);
+				document.body.appendChild( renderer.domElement );
+				canvas = renderer.domElement;
+				
+				//Pointer Lock Init
+				canvas.requestPointerLock = canvas.requestPointerLock ||
+					 canvas.mozRequestPointerLock ||
+					 canvas.webkitRequestPointerLock;
+				document.exitPointerLock = document.exitPointerLock ||
+							   document.mozExitPointerLock ||
+							   document.webkitExitPointerLock;
+				
+				//generate stadium
+				addBox(0,0,0,fieldLength,wallWidth,fieldWidth); // floor
+				addBox(0,fieldHeight,0,fieldLength,wallWidth,fieldWidth); //ceiling
+				addBox(fieldLength/2,fieldHeight/2,0,wallWidth,fieldHeight,fieldWidth); //goal end(1) wall
+				addBox(-fieldLength/2,fieldHeight/2,0,wallWidth,fieldHeight,fieldWidth); //goal end(2) wall
+				addBox(0,fieldHeight/2,fieldWidth/2,fieldLength,fieldHeight,wallWidth); //sideline(1) wall
+				addBox(0,fieldHeight/2,-fieldWidth/2,fieldLength,fieldHeight,wallWidth); //sideline(2) wall
+				var light = new THREE.AmbientLight(0xe04040);
+				scene.add(light);
+				//test ball
+				addBall(10,40,15,6);
+				addBall(15,30,15,2);
+				
+			}
+			
+			//boxes are static(mass 0)
+			function addBox(x,y,z,w,h,d){
+				//ThreeJS
+				var geometry = new THREE.BoxGeometry(w, h, d);
+				var color = 0x0C8A12 + Math.random()*1000;
+				var material = new THREE.MeshLambertMaterial( { color: color,transparent:true, opacity:0.5 } );
+				var mesh = new THREE.Mesh(geometry, material);
+				mesh.position.set(x,y,z);
+				scene.add(mesh);
+				
+				//CannonJS
+				var shape = new CANNON.Box(
+					new CANNON.Vec3(w/2, h/2, d/2)
+				);
+				var body = new CANNON.Body({ mass:0, shape:shape, material: groundMaterial});
+				body.position.set(x,y,z);
+				world.addBody(body);
+				
+				gameObjects.push({
+					threejs: mesh,
+					cannonjs: body,
+				});
+			}
+			
+			//add ball with mass
+			function addBall(x,y,z,r){
+				//ThreeJS
+				var geometry = new THREE.SphereGeometry(r,32,32);
+				//var texture = new THREE.TextureLoader().load('images/plus.png');
+				//var material = new THREE.MeshLambertMaterial( { map: texture } );
+				var color = 0x0C8A12 + Math.random()*1000;
+				var material = new THREE.MeshLambertMaterial( { color: color } );
+				var mesh = new THREE.Mesh(geometry, material);
+				mesh.position.set(x,y,z);
+				scene.add(mesh);
+				
+				//CannonJS
+				var shape = new CANNON.Sphere(r);
+				var body = new CANNON.Body({ mass:4, shape:shape, material: ballMaterial});
+				body.position.set(x,y,z);
+				world.addBody(body);
+				
+				gameObjects.push({
+					threejs: mesh,
+					cannonjs: body,
+				});
+			}
+			
+			function animation(time){
+				if(lastTime){
+					var timePassed = time - lastTime;
+					updatePhysics(timePassed);
+					
+					var vector = new THREE.Vector3(0,0,-1);
+					
+					camera.position.copy(gameObjects[gameObjects.length - 1].threejs.position.clone().addScaledVector(new THREE.Vector3(0,8,0), 1));
+					camera.lookAt(gameObjects[gameObjects.length - 2].threejs.position.clone());
+					var ballDir = new THREE.Vector3( 0, 0, 1 ).applyQuaternion(camera.quaternion);
+					camera.position.addScaledVector(ballDir, 15);
+					
+					vector.applyQuaternion(camera.quaternion);
+					if(pressingForeward){
+						//camera.position.addScaledVector( vector, 1 );
+						gameObjects[gameObjects.length - 1].cannonjs.applyForce(new CANNON.Vec3(500,0,0), gameObjects[gameObjects.length - 1].cannonjs.position);
+					}
+					if(pressingBackward){
+						//camera.position.addScaledVector( vector, -1 );
+						gameObjects[gameObjects.length - 1].cannonjs.applyForce(new CANNON.Vec3(-500,0,0), gameObjects[gameObjects.length - 1].cannonjs.position);
+					}
+					if(pressingRight){
+						vec.setFromMatrixColumn( camera.matrix, 0 );
+						//camera.position.addScaledVector( vec, 1 );
+						gameObjects[gameObjects.length - 1].cannonjs.applyForce(new CANNON.Vec3(0,0,500), gameObjects[gameObjects.length - 1].cannonjs.position);
+					}
+					if(pressingLeft){
+						vec.setFromMatrixColumn( camera.matrix, 0 );
+						//camera.position.addScaledVector( vec, -1 );
+						gameObjects[gameObjects.length - 1].cannonjs.applyForce(new CANNON.Vec3(0,0,-500), gameObjects[gameObjects.length - 1].cannonjs.position);
+					}
+					if(pressingJump){
+						gameObjects[gameObjects.length - 1].cannonjs.applyForce(new CANNON.Vec3(0,500,0), gameObjects[gameObjects.length - 1].cannonjs.position);
+					}
+					
+					renderer.render(scene, camera);
+				}
+				lastTime = time;
+			}
+			
+			function updatePhysics(timePassed){
+				world.step(timePassed / 1000); // step CannonJS physics world
+				
+				//copy moving object's coordinates from CannonJS to ThreeJS
+				for(var i = 0; i < gameObjects.length; i++){
+					gameObjects[i].threejs.position.copy(gameObjects[i].cannonjs.position);
+					gameObjects[i].threejs.quaternion.copy(gameObjects[i].cannonjs.quaternion);
+				}
+					
+			}
+			
+			window.addEventListener("resize", function(){
+				// Reset renderer
+				camera.aspect = window.innerWidth / window.innerHeight;
+				camera.updateProjectionMatrix();
+				renderer.setSize(window.innerWidth, window.innerHeight);
+				renderer.render(scene, camera);
+			});
+			document.addEventListener("mousemove", function(event){
+				euler.setFromQuaternion( camera.quaternion );
+				euler.y -= event.movementX * 0.002;
+				euler.x -= event.movementY * 0.002;
+				euler.x = Math.max( - Math.PI/2, Math.min( Math.PI/2, euler.x ) );
+				camera.quaternion.setFromEuler( euler );
+			});
+			document.addEventListener("keydown", function(event){
+				if(event.keyCode === 68)	//d
+					pressingRight = true;
+				else if(event.keyCode === 83)	//s
+					pressingBackward = true;
+				else if(event.keyCode === 65) //a
+					pressingLeft = true;
+				else if(event.keyCode === 87) // w
+					pressingForeward = true;
+				else if(event.keyCode == 32)
+					pressingJump = true;
+			});
+			document.addEventListener("keyup", function(event){
+				if(event.keyCode === 68)	//d
+					pressingRight = false;
+				else if(event.keyCode === 83)	//s
+					pressingBackward = false;
+				else if(event.keyCode === 65) //a
+					pressingLeft = false;
+				else if(event.keyCode === 87) // w
+					pressingForeward = false;
+				else if(event.keyCode == 32)
+					pressingJump = false;
+			});
+			document.addEventListener("click", function(event){
+				if(document.pointerLockElement == null){					
+					canvas.requestPointerLock();
+				}
+			});
+		</script>
+	</body>
+</html>
