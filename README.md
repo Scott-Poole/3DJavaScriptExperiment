@@ -8,3 +8,5 @@ The camera takes some getting used to and I know its possible to pass through th
 Just refresh to respawn if you start falling through the map.
 
 Try it out here: https://scott-poole.github.io/3DJavaScriptExperiment/singlePlayerSoccer.html
+
+Sorry its so dark :*(
