@@ -44,7 +44,7 @@
 				
 				//CannonJS initialization
 				world = new CANNON.World();
-				world.gravity.set(0,-10,0);
+				world.gravity.set(0,-15,0);
 				world.broadphase = new CANNON.NaiveBroadphase();
 				world.solver.iterations = 40;
 				groundMaterial = new CANNON.Material("ground");
@@ -176,7 +176,7 @@
 						gameObjects[gameObjects.length - 1].cannonjs.applyForce(new CANNON.Vec3(ballDir.x*100,0,ballDir.z*100).cross(new CANNON.Vec3(0,1,0)), gameObjects[gameObjects.length - 1].cannonjs.position);
 					}
 					if(pressingJump){
-						gameObjects[gameObjects.length - 1].cannonjs.applyForce(new CANNON.Vec3(0,500,0), gameObjects[gameObjects.length - 1].cannonjs.position);
+						gameObjects[gameObjects.length - 1].cannonjs.applyForce(new CANNON.Vec3(0,100,0), gameObjects[gameObjects.length - 1].cannonjs.position);
 					}
 					
 					
